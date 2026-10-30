@@ -109,6 +109,75 @@ hr {
     border-radius: 12px;
 }
 
+
+/* ==============================
+   SIDEBAR WIDGET IMPROVEMENTS
+   ============================== */
+
+/* Number input background */
+[data-testid="stSidebar"] [data-testid="stNumberInput"] [data-baseweb="input"] {
+    background-color: #142D20 !important;
+    border: 1px solid #31563A !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+}
+
+/* Number input text */
+[data-testid="stSidebar"] [data-testid="stNumberInput"] input {
+    background-color: transparent !important;
+    color: #E8F3E9 !important;
+}
+
+/* Plus and minus buttons */
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button {
+    background-color: #1B3A28 !important;
+    color: #A6E36B !important;
+    border: none !important;
+}
+
+/* Crop dropdown */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background-color: #142D20 !important;
+    color: #E8F3E9 !important;
+    border: 1px solid #31563A !important;
+    border-radius: 10px !important;
+}
+
+/* Dropdown text */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] div {
+    color: #E8F3E9 !important;
+}
+
+/* Dropdown menu */
+[data-testid="stSidebar"] [role="listbox"] {
+    background-color: #142D20 !important;
+}
+
+[data-testid="stSidebar"] [role="option"] {
+    color: #E8F3E9 !important;
+}
+
+/* Checkbox */
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label {
+    color: #E8F3E9 !important;
+}
+
+/* Slider thumb */
+[data-testid="stSidebar"] [data-testid="stSlider"] [role="slider"] {
+    background-color: #A6E36B !important;
+    border-color: #A6E36B !important;
+}
+
+/* Primary button */
+[data-testid="stSidebar"] .stButton button {
+    background-color: #8CCF55 !important;
+    color: #081810 !important;
+    border-radius: 10px !important;
+    border: none !important;
+    font-weight: 700 !important;
+    min-height: 46px !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -312,10 +381,10 @@ if weather is not None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.plotly_chart(temp_fig, use_container_width=True)
+        st.plotly_chart(temp_fig, use_container_width=True, theme=None)
 
     with col2:
-        st.plotly_chart(rain_fig, use_container_width=True)
+        st.plotly_chart(rain_fig, use_container_width=True, theme=None)
 
     st.dataframe(weather, use_container_width=True, hide_index=True)
 
@@ -525,7 +594,12 @@ if weather is not None:
                 st.error(f"Yield model error: {e}")
 
 
-    with st.expander("Train with your own historical yield CSV"):
+    with st.expander("⚙️ Model Training — Historical Yield Data", expanded=False):
+        st.markdown("### Train Your Agriculture Model")
+        st.caption(
+            "Upload historical crop-yield data to train and evaluate "
+            "your machine learning model."
+        )
         st.write("CSV must contain these columns:")
         st.code(", ".join(FEATURES + [TARGET]))
         uploaded = st.file_uploader("Upload labelled training CSV", type=["csv"])
