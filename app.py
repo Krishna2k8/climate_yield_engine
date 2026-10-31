@@ -3,12 +3,15 @@ import pandas as pd
 import plotly.express as px
 from src.weather import get_weather
 from src.satellite import get_sentinel_ndvi
+from src.satellite_mosaic import get_farm_zone_ndvi
 from src.risk import assess_risks
 from src.yield_model import train_model, predict_yield, create_demo_dataset, SAMPLE_PATH, FEATURES, TARGET
 import plotly.express as px
 import pydeck as pdk
 from src.farm_boundary import load_farm_geojson
 from src.sensors import load_sensor_data, summarize_sensor_data
+from src.zone_intelligence import assess_zone_risks
+from src.recommendations import generate_recommendations
 
 st.set_page_config(page_title="Climate Yield Engine", page_icon="🌱", layout="wide")
 
@@ -239,6 +242,7 @@ st.info("Enter a farm's coordinates. Example coordinates are prefilled for Benga
 # ==============================
 
 farm_boundary = None
+sensor_summary = None
 
 if boundary_file is not None:
     try:
@@ -382,10 +386,23 @@ if run:
         st.session_state["weather"] = weather
         st.session_state["location"] = (lat, lon)
         st.session_state["crop"] = crop_name
+        
         st.session_state["satellite"] = None
+        st.session_state["zone_satellite"] = None
+
         if use_satellite:
-            with st.spinner("Searching Sentinel-2 imagery (this can take a while)..."):
+            with st.spinner("Analysing Sentinel-2 imagery across your farm..."):
                 st.session_state["satellite"] = get_sentinel_ndvi(lat, lon)
+
+                if farm_boundary is not None:
+                    st.session_state["zone_satellite"] = get_farm_zone_ndvi(
+                        farm_boundary,
+                        days_back=90,
+                        max_datatakes=12,
+                        target_coverage_pct=95
+                    )
+
+
     except Exception as e:
         st.error(f"Could not retrieve weather data: {e}")
 
@@ -624,6 +641,95 @@ if weather is not None:
             )
 
     
+    # ==============================
+    # WHOLE-FARM SATELLITE INTELLIGENCE
+    # ==============================
+
+    zone_satellite = st.session_state.get("zone_satellite")
+
+    if zone_satellite is not None:
+
+        st.divider()
+        st.markdown("### 🛰️ Whole-Farm Satellite Intelligence")
+
+        st.info(zone_satellite.get("message", "Satellite analysis completed."))
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Satellite Scene",
+                zone_satellite.get("scene_date") or "Unavailable"
+            )
+
+        with col2:
+            st.metric(
+                "Spatial Coverage",
+                f"{zone_satellite.get('farm_spatial_coverage_pct', 0):.1f}%"
+            )
+
+        with col3:
+            st.metric(
+                "Usable Coverage",
+                f"{zone_satellite.get('farm_usable_coverage_pct', 0):.1f}%"
+            )
+
+        with col4:
+            st.metric(
+                "Tiles Used",
+                len(zone_satellite.get("tiles_used", []))
+            )
+
+        st.caption(
+            "Radiometric correction: "
+            + (
+                "Applied"
+                if zone_satellite.get("reflectance_correction_applied")
+                else "Not confirmed"
+            )
+            + " | Cloud and shadow masking: "
+            + (
+                "Applied"
+                if zone_satellite.get("cloud_mask_applied")
+                else "Not confirmed"
+            )
+        )
+
+        if zone_satellite.get("zones"):
+
+            st.markdown("#### Zone-wise Vegetation Analysis")
+
+            satellite_table = pd.DataFrame([
+                {
+                    "Zone": zone["zone_id"],
+                    "Area (ha)": zone["area_ha"],
+                    "Median NDVI": zone["ndvi"],
+                    "Mean NDVI": zone["mean_ndvi"],
+                    "Usable Coverage (%)": zone["usable_coverage_pct"],
+                    "Valid Pixels": zone["valid_pixels"],
+                    "Red Reflectance": zone["median_red_reflectance"],
+                    "NIR Reflectance": zone["median_nir_reflectance"],
+                }
+                for zone in zone_satellite["zones"]
+            ])
+
+            st.dataframe(
+                satellite_table,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.caption(
+                "NDVI indicates vegetation greenness, but does not "
+                "diagnose drought or crop damage on its own. "
+                "Always consider acquisition date and field conditions."
+            )
+
+        else:
+            st.warning(
+                "No usable zone-wise NDVI measurements are available."
+            )
+
     # CLIMATE RISK ASSESSMENT
 
     st.subheader("🌦️ Climate Risk Assessment", anchor="climate-risk")
@@ -707,6 +813,119 @@ if weather is not None:
 
   
     # YIELD PREDICTION
+
+    # ==============================
+    # ZONE-WISE MICRO-LOCATION INTELLIGENCE
+    # ==============================
+
+    if farm_boundary is not None:
+
+        zone_risks = assess_zone_risks(
+            farm_boundary["zones"],
+            sensor_summary,
+            weather
+        )
+
+        zone_plans = generate_recommendations(zone_risks)
+
+        st.divider()
+
+        st.subheader("🧠 Zone-wise Micro-Location Intelligence")
+
+        st.caption(
+            "Each farm zone receives its own soil-moisture assessment "
+            "and targeted recommendations. Heat and rainfall risks "
+            "currently use the farm-level weather forecast."
+        )
+
+        for zone_result, zone_plan in zip(zone_risks, zone_plans):
+
+            with st.container(border=True):
+
+                st.markdown(
+                    f"### 📍 {zone_result['zone_id']} "
+                    f"— {zone_result['area_ha']:.2f} hectares"
+                )
+
+                # ZONE RISK ASSESSMENT
+
+                st.markdown("**Climate Risk Assessment**")
+
+                risk_columns = st.columns(
+                    len(zone_result["risks"])
+                )
+
+                for index, risk in enumerate(zone_result["risks"]):
+
+                    with risk_columns[index]:
+
+                        level = risk["level"]
+
+                        if level == "High":
+                            st.error(
+                                f"🔴 **{risk['risk']}**\n\n"
+                                f"High Risk\n\n{risk['reason']}"
+                            )
+
+                        elif level == "Moderate":
+                            st.warning(
+                                f"🟠 **{risk['risk']}**\n\n"
+                                f"Moderate Risk\n\n{risk['reason']}"
+                            )
+
+                        elif level == "Low":
+                            st.success(
+                                f"🟢 **{risk['risk']}**\n\n"
+                                f"Low Risk\n\n{risk['reason']}"
+                            )
+
+                        else:
+                            st.info(
+                                f"⚪ **{risk['risk']}**\n\n"
+                                f"Unknown\n\n{risk['reason']}"
+                            )
+
+                # DATA COVERAGE
+
+                st.markdown("**Data Coverage**")
+
+                st.caption(
+                    " · ".join(zone_result["data_status"])
+                )
+
+                if zone_result["evidence"]:
+                    st.write(
+                        "**Measured evidence:** "
+                        + " | ".join(zone_result["evidence"])
+                    )
+
+                # SMART RECOMMENDATIONS
+
+                st.markdown("**💡 Recommended Actions**")
+
+                for item in zone_plan["recommendations"]:
+
+                    st.markdown(
+                        f"**{item['priority']} Priority · "
+                        f"{item['timing']}**"
+                    )
+
+                    st.write(item["action"])
+
+                    st.caption(
+                        f"Why: {item['reason']}"
+                    )
+
+                    st.caption(
+                        f"Expected benefit: {item['expected_benefit']}"
+                    )
+
+                    st.caption(
+                        f"Recommendation confidence: {item['confidence']}"
+                    )
+
+                    st.divider()
+
 
     st.subheader("🌾 Yield Prediction", anchor="yield-prediction")
 
