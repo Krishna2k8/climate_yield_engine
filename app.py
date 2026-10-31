@@ -190,6 +190,22 @@ with st.sidebar:
         FARM CONFIGURATION
     </div>
     """, unsafe_allow_html=True)
+    
+    
+    # SIDEBAR NAVIGATION
+
+    st.markdown("### WORKSPACE")
+
+    st.markdown(
+        "[🏠 Overview](#farm-overview)\n\n"
+        "[🌦️ Weather Analytics](#weather-analytics)\n\n"
+        "[🛰️ Satellite Monitoring](#satellite-monitoring)\n\n"
+        "[⚠️ Climate Risk](#climate-risk)\n\n"
+        "[🌾 Yield Prediction](#yield-prediction)"
+    )
+
+    st.divider()
+
     st.header("Farm location")
     lat = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=12.9716, format="%.5f")
     lon = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=77.5946, format="%.5f")
@@ -227,7 +243,7 @@ if weather is not None:
     
     # FARM OVERVIEW CARDS
 
-    st.subheader("Farm Overview")
+    st.subheader("Farm Overview", anchor="farm-overview")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -254,7 +270,7 @@ if weather is not None:
     
     # WEATHER ANALYTICS
 
-    st.subheader("Weather Analytics")
+    st.subheader("Weather Analytics", anchor="weather-analytics")
 
     chart_df = weather[
         ["time", "temperature_2m_max", "temperature_2m_min"]
@@ -322,7 +338,7 @@ if weather is not None:
     
     # SATELLITE VEGETATION INTELLIGENCE
 
-    st.subheader("🛰️ Satellite & Vegetation Intelligence")
+    st.subheader("🛰️ Satellite & Vegetation Intelligence", anchor="satellite-monitoring")
 
     with st.container(border=True):
 
@@ -371,7 +387,7 @@ if weather is not None:
     
     # CLIMATE RISK ASSESSMENT
 
-    st.subheader("🌦️ Climate Risk Assessment")
+    st.subheader("🌦️ Climate Risk Assessment", anchor="climate-risk")
 
     risks, recommendations, metrics = assess_risks(weather, soil_value)
 
@@ -421,7 +437,7 @@ if weather is not None:
   
     # YIELD PREDICTION
 
-    st.subheader("🌾 Yield Prediction")
+    st.subheader("🌾 Yield Prediction", anchor="yield-prediction")
 
     st.warning(
         "The default training data is synthetic. "
