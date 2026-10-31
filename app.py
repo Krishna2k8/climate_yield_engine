@@ -300,6 +300,10 @@ if weather is not None:
         var_name="temperature",
         value_name="°C"
     )
+    chart_df["temperature"] = chart_df["temperature"].map({
+        "temperature_2m_max": "Maximum",
+        "temperature_2m_min": "Minimum"
+    })
 
     temp_fig = px.line(
         chart_df,
@@ -307,9 +311,14 @@ if weather is not None:
         y="°C",
         color="temperature",
         title="Temperature Forecast",
+        labels={
+            "time": "Date",
+            "°C": "Temperature (°C)",
+            "temperature": "Temperature Series"
+        },
         color_discrete_map={
-            "temperature_2m_max": "#A6E36B",
-            "temperature_2m_min": "#55B8A6"
+            "Maximum": "#A6E36B",
+            "Minimum": "#55B8A6"
         }
     )
 
@@ -327,13 +336,27 @@ if weather is not None:
         margin=dict(l=20, r=20, t=60, b=20),
         hovermode="x unified"
     )
+    temp_fig.update_xaxes(
+        title="Date",
+        showgrid=False
+    )
+
+    temp_fig.update_yaxes(
+        title="Temperature (°C)",
+        gridcolor="#294534",
+        zeroline=False
+    )
 
     rain_fig = px.bar(
         weather,
         x="time",
         y="precipitation_sum",
         title="Rainfall Forecast",
-        color_discrete_sequence=["#8CCF55"]
+        color_discrete_sequence=["#8CCF55"],
+        labels={
+            "time": "Date",
+            "precipitation_sum": "Rainfall (mm)"
+        },
     )
 
     rain_fig.update_layout(
@@ -345,6 +368,16 @@ if weather is not None:
         margin=dict(l=20, r=20, t=60, b=20),
         showlegend=False
     )
+    rain_fig.update_xaxes(
+        title="Date",
+        showgrid=False
+    )
+
+    rain_fig.update_yaxes(
+        title="Rainfall (mm)",
+        gridcolor="#294534",
+        zeroline=False
+    )
 
     col1, col2 = st.columns(2)
 
@@ -354,7 +387,8 @@ if weather is not None:
     with col2:
         st.plotly_chart(rain_fig, use_container_width=True, theme=None)
 
-    st.dataframe(weather, use_container_width=True, hide_index=True)
+    with st.expander("📊 View detailed weather data"):
+        st.dataframe(weather, use_container_width=True, hide_index=True)
 
     
     # SATELLITE VEGETATION INTELLIGENCE
