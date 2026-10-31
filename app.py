@@ -434,6 +434,18 @@ if weather is not None:
     # Recommendations
     st.markdown("### 💡 Smart Recommendations")
 
+    # DISPLAY SMART RECOMMENDATIONS
+
+    with st.container(border=True):
+
+        if recommendations:
+
+            for item in recommendations:
+                st.markdown(f"🌱 {item}")
+
+        else:
+            st.info("No recommendations available right now.")
+
   
     # YIELD PREDICTION
 
