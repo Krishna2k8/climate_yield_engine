@@ -2,6 +2,8 @@
 from collections import defaultdict
 from datetime import date, timedelta
 import math
+import requests
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import rasterio
@@ -134,23 +136,19 @@ def _group_by_datatake(items):
     return list(groups.items())
 
 
-
 def _boa_radiometry(item):
-    """Return (baseline, additive DN offset, quantification value).
-
-    Sentinel-2 L2A processing baseline 04.00 introduced BOA_ADD_OFFSET.
-    For the post-04.00 baselines currently distributed by the collection,
-    the offset is -1000 DN and the quantification value is 10000.
-    Earlier baselines have no additive offset.
-
-    Refuse unknown baselines rather than silently calculate incorrect NDVI.
     """
+    Read the actual Sentinel-2 BOA radiometric parameters
+    from the product-metadata XML.
+
+    B04 and B08 offsets are read independently.
+    No assumed offset is used for newer products.
+    """
+
     baseline_value = item.properties.get("s2:processing_baseline")
+
     if baseline_value is None:
-        raise ValueError(
-            "Sentinel-2 processing baseline is missing; cannot safely "
-            "apply the BOA reflectance offset."
-        )
+        raise ValueError("Sentinel-2 processing baseline is missing.")
 
     try:
         parts = str(baseline_value).strip().lstrip("vV").split(".")
@@ -158,11 +156,68 @@ def _boa_radiometry(item):
         minor = int(parts[1]) if len(parts) > 1 else 0
     except (TypeError, ValueError, IndexError) as exc:
         raise ValueError(
-            f"Unrecognized Sentinel-2 processing baseline: {baseline_value!r}"
+            f"Invalid processing baseline: {baseline_value}"
         ) from exc
 
-    offset = -1000.0 if (major, minor) >= (4, 0) else 0.0
-    return str(baseline_value), offset, 10000.0
+    metadata_asset = item.assets.get("product-metadata")
+
+    if metadata_asset is None:
+        raise ValueError("Product metadata XML asset is unavailable.")
+
+    signed_item = planetary_computer.sign(item)
+
+    response = requests.get(
+        signed_item.assets["product-metadata"].href,
+        timeout=30
+    )
+    response.raise_for_status()
+
+    root = ET.fromstring(response.content)
+
+    def local_name(tag):
+        return tag.rsplit("}", 1)[-1]
+
+    quantification = None
+    offsets = {}
+
+    band_mapping = {
+        "3": "B04",
+        "7": "B08",
+    }
+
+    for element in root.iter():
+        name = local_name(element.tag)
+
+        if name == "BOA_QUANTIFICATION_VALUE":
+            quantification = float(element.text)
+
+        elif name == "BOA_ADD_OFFSET":
+            band_id = element.attrib.get("band_id")
+
+            if band_id in band_mapping:
+                offsets[band_mapping[band_id]] = float(element.text)
+
+    if quantification is None or quantification <= 0:
+        raise ValueError(
+            "Valid BOA quantification value missing from product metadata."
+        )
+
+    # Processing baselines before 04.00 did not use BOA_ADD_OFFSET.
+    if (major, minor) < (4, 0):
+        offsets = {
+            "B04": 0.0,
+            "B08": 0.0,
+        }
+
+    else:
+        for band in ("B04", "B08"):
+            if band not in offsets:
+                raise ValueError(
+                    f"BOA offset for {band} is missing from product metadata."
+                )
+
+    return str(baseline_value), offsets, quantification
+
 
 def _evaluate_datatake(group_key, group_items, farm_zones, target_crs, resolution_m):
     """Mosaic all available tiles in one datatake and calculate zone NDVI."""
@@ -207,7 +262,7 @@ def _evaluate_datatake(group_key, group_items, farm_zones, target_crs, resolutio
             continue
 
         try:
-            baseline, boa_offset_dn, quantification_value = _boa_radiometry(item)
+            baseline, band_offsets, quantification_value = _boa_radiometry(item)
             signed_item = planetary_computer.sign(item)
 
             with (
@@ -256,10 +311,10 @@ def _evaluate_datatake(group_key, group_items, farm_zones, target_crs, resolutio
                     red = np.full(red_dn.shape, np.nan, dtype="float32")
                     nir = np.full(nir_dn.shape, np.nan, dtype="float32")
                     red[raw_valid] = (
-                        red_dn[raw_valid] + boa_offset_dn
+                        red_dn[raw_valid] + band_offsets["B04"]
                     ) / quantification_value
                     nir[raw_valid] = (
-                        nir_dn[raw_valid] + boa_offset_dn
+                        nir_dn[raw_valid] + band_offsets["B08"]
                     ) / quantification_value
 
                     scl = _reproject_band(
@@ -309,7 +364,10 @@ def _evaluate_datatake(group_key, group_items, farm_zones, target_crs, resolutio
                     used_tiles.add(str(tile_id))
                     radiometry_by_tile[str(tile_id)] = {
                         "processing_baseline": baseline,
-                        "boa_add_offset_dn": boa_offset_dn,
+                        "boa_add_offsets_dn": {
+                            "B04": band_offsets["B04"],
+                            "B08": band_offsets["B08"],
+                        },
                         "quantification_value": quantification_value,
                     }
 

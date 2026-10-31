@@ -826,7 +826,10 @@ if weather is not None:
             weather
         )
 
-        zone_plans = generate_recommendations(zone_risks)
+        zone_plans = generate_recommendations(
+            zone_risks,
+            satellite_data=st.session_state.get("zone_satellite")
+        )
 
         st.divider()
 
