@@ -5,6 +5,10 @@ from src.weather import get_weather
 from src.satellite import get_sentinel_ndvi
 from src.risk import assess_risks
 from src.yield_model import train_model, predict_yield, create_demo_dataset, SAMPLE_PATH, FEATURES, TARGET
+import plotly.express as px
+import pydeck as pdk
+from src.farm_boundary import load_farm_geojson
+from src.sensors import load_sensor_data, summarize_sensor_data
 
 st.set_page_config(page_title="Climate Yield Engine", page_icon="🌱", layout="wide")
 
@@ -212,10 +216,164 @@ with st.sidebar:
     forecast_days = st.slider("Forecast window (days)", 3, 16, 7)
     crop_name = st.selectbox("Crop", ["Rice", "Wheat", "Maize", "Millet"])
     crop_codes = {"Rice": 0, "Wheat": 1, "Maize": 2, "Millet": 3}
+    st.divider()
+    st.subheader("🗺️ Farm Boundary")
+
+    boundary_file = st.file_uploader(
+        "Upload farm boundary (GeoJSON)",
+        type=["geojson", "json"]
+    )
+
+    zone_count = st.slider(
+        "Number of micro-zones",
+        min_value=2,
+        max_value=8,
+        value=4
+    )
     use_satellite = st.checkbox("Attempt Sentinel-2 NDVI lookup", value=False)
     run = st.button("Run climate analysis", type="primary", use_container_width=True)
 
 st.info("Enter a farm's coordinates. Example coordinates are prefilled for Bengaluru; replace them with your field location.")
+# ==============================
+# FARM BOUNDARY & MICRO-ZONES
+# ==============================
+
+farm_boundary = None
+
+if boundary_file is not None:
+    try:
+        farm_boundary = load_farm_geojson(
+            boundary_file.getvalue().decode("utf-8"),
+            number_of_zones=zone_count
+        )
+
+        st.subheader("🗺️ Farm Boundary & Micro-Location Zones")
+
+        st.metric(
+            "Total Farm Area",
+            f"{farm_boundary['area_ha']:.3f} hectares"
+        )
+
+        zone_features = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "zone_id": zone["zone_id"],
+                        "area_ha": zone["area_ha"]
+                    },
+                    "geometry": zone["geometry"]
+                }
+                for zone in farm_boundary["zones"]
+            ]
+        }
+
+        farm_feature = {
+            "type": "Feature",
+            "properties": {"name": "Farm Boundary"},
+            "geometry": farm_boundary["geometry"]
+        }
+
+        zone_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=zone_features,
+            pickable=True,
+            filled=True,
+            stroked=True,
+            get_fill_color=[80, 180, 100, 100],
+            get_line_color=[166, 227, 107, 255],
+            line_width_min_pixels=2
+        )
+
+        boundary_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=farm_feature,
+            pickable=False,
+            filled=False,
+            stroked=True,
+            get_line_color=[255, 220, 100, 255],
+            line_width_min_pixels=4
+        )
+
+        view_state = pdk.ViewState(
+            latitude=farm_boundary["centroid"]["latitude"],
+            longitude=farm_boundary["centroid"]["longitude"],
+            zoom=15,
+            pitch=0
+        )
+
+        deck = pdk.Deck(
+            layers=[zone_layer, boundary_layer],
+            initial_view_state=view_state,
+            tooltip={
+                "html": "<b>{zone_id}</b><br/>Area: {area_ha} hectares"
+            }
+        )
+
+        st.pydeck_chart(deck, use_container_width=True)
+
+        zone_table = pd.DataFrame([
+            {
+                "Zone": zone["zone_id"],
+                "Area (hectares)": zone["area_ha"],
+                "Latitude": zone["centroid"]["latitude"],
+                "Longitude": zone["centroid"]["longitude"]
+            }
+            for zone in farm_boundary["zones"]
+        ])
+
+        st.markdown("### Zone Details")
+        st.dataframe(zone_table, use_container_width=True, hide_index=True)
+                # ==============================
+        # SOIL SENSOR DATA
+        # ==============================
+
+        st.divider()
+        st.subheader("🌡️ Soil Sensor Intelligence")
+
+        st.caption(
+            "Upload readings from sensors installed in your farm. "
+            "Each reading must be associated with a valid farm zone."
+        )
+
+        sensor_file = st.file_uploader(
+            "Upload soil sensor CSV",
+            type=["csv"],
+            key="farm_sensor_upload"
+        )
+
+        if sensor_file is not None:
+            try:
+                sensor_data = load_sensor_data(
+                    sensor_file.getvalue(),
+                    [zone["zone_id"] for zone in farm_boundary["zones"]]
+                )
+
+                sensor_summary = summarize_sensor_data(sensor_data)
+
+                st.success("Sensor data successfully validated!")
+
+                st.markdown("### Zone-wise Sensor Readings")
+
+                st.dataframe(
+                    sensor_summary,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                with st.expander("View all uploaded sensor readings"):
+                    st.dataframe(
+                        sensor_data,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+            except Exception as e:
+                st.error(f"Sensor data error: {e}")
+
+    except Exception as e:
+        st.error(f"Farm boundary processing failed: {e}")
 
 if run:
     try:
