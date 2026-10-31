@@ -420,13 +420,37 @@ if weather is not None:
 
                 st.divider()
 
-                info1, info2 = st.columns(2)
 
-                info1.write("📅 **Satellite scene date**")
-                info1.write(str(sat.get("scene_date", "Unavailable")))
+                # SATELLITE SCENE INFORMATION
 
-                info2.write("☁️ **Cloud coverage**")
-                info2.write(str(sat.get("cloud_cover", "Unavailable")) + "%")
+                st.markdown("### 🛰️ Satellite Scene Details")
+
+                meta1, meta2, meta3 = st.columns(3)
+
+                meta1.metric(
+                    "📅 Scene Date",
+                    sat.get("scene_date") or "Unavailable"
+                )
+
+                cloud = sat.get("cloud_cover")
+
+                meta2.metric(
+                    "☁️ Cloud Coverage",
+                    f"{float(cloud):.1f}%" if cloud is not None else "Unavailable"
+                )
+
+                valid_pixels = sat.get("valid_pixels")
+
+                meta3.metric(
+                    "🖼️ Valid Pixels",
+                    str(valid_pixels) if valid_pixels is not None else "—"
+                )
+
+                st.caption(
+                    "Satellite scene metadata and valid pixels used "
+                    "for the vegetation index calculation."
+                )
+
 
             else:
                 st.warning(

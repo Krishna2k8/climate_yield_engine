@@ -10,6 +10,7 @@ def get_sentinel_ndvi(lat: float, lon: float, days_back: int = 45):
     try:
         import planetary_computer
         import rasterio
+        from rasterio.warp import transform as transform_coords
         from pystac_client import Client
 
     except Exception as exc:
@@ -73,7 +74,14 @@ def get_sentinel_ndvi(lat: float, lon: float, days_back: int = 45):
         with rasterio.open(red_href) as red_src, \
              rasterio.open(nir_href) as nir_src:
 
-            row, col = red_src.index(lon, lat)
+            x, y = transform_coords(
+                "EPSG:4326",
+                red_src.crs,
+                [lon],
+                [lat]
+            )
+
+            row, col = red_src.index(x[0], y[0])
 
             if not (
                 0 <= row < red_src.height
