@@ -294,7 +294,7 @@ if weather is not None:
     st.subheader("Weather Analytics", anchor="weather-analytics")
 
     chart_df = weather[
-        ["time", "temperature_2m_max", "temperature_2m_min"]
+        ["time", "temperature_2m_max", "temperature_2m_min", "temperature_2m_mean"]
     ].melt(
         id_vars="time",
         var_name="temperature",
@@ -302,7 +302,8 @@ if weather is not None:
     )
     chart_df["temperature"] = chart_df["temperature"].map({
         "temperature_2m_max": "Maximum",
-        "temperature_2m_min": "Minimum"
+        "temperature_2m_min": "Minimum",
+        "temperature_2m_mean": "Mean"
     })
 
     temp_fig = px.line(
@@ -318,7 +319,8 @@ if weather is not None:
         },
         color_discrete_map={
             "Maximum": "#A6E36B",
-            "Minimum": "#55B8A6"
+            "Minimum": "#55B8A6",
+            "Mean": "#F4C95D"
         }
     )
 
