@@ -490,6 +490,26 @@ if weather is not None:
 
     st.markdown("### Risk Analysis")
 
+    # RISK SUMMARY
+
+    high_count = sum(1 for _, level, _ in risks if level == "High")
+    moderate_count = sum(1 for _, level, _ in risks if level == "Moderate")
+    low_count = sum(1 for _, level, _ in risks if level == "Low")
+
+    risk1, risk2, risk3 = st.columns(3)
+
+    with risk1:
+        st.metric("🔴 High Risks", high_count)
+
+    with risk2:
+        st.metric("🟠 Moderate Risks", moderate_count)
+
+    with risk3:
+        st.metric("🟢 Low Risks", low_count)
+
+    st.divider()
+
+
     # Display risk cards
     risk_columns = st.columns(2)
 
