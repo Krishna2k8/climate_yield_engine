@@ -241,33 +241,54 @@ if weather is not None:
         soil_value = float(weather[soil_col].dropna().mean())
 
     
+    
     # FARM OVERVIEW CARDS
 
     st.subheader("Farm Overview", anchor="farm-overview")
 
+    avg_temp = float(weather["temperature_2m_mean"].mean())
+
+    total_rainfall = float(
+        weather["precipitation_sum"].fillna(0).sum()
+    )
+
+    soil_display = (
+        f"{soil_value * 100:.1f}%"
+        if soil_value is not None
+        else "Unavailable"
+    )
+
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric(
-        "Selected Crop",
-        st.session_state.get("crop", "—")
+    with col1:
+        st.metric(
+            "🌾 Selected Crop",
+            st.session_state.get("crop", "—")
+        )
+
+    with col2:
+        st.metric(
+            "🌡️ Average Temperature",
+            f"{avg_temp:.1f} °C"
+        )
+
+    with col3:
+        st.metric(
+            "🌧️ Forecast Rainfall",
+            f"{total_rainfall:.1f} mm"
+        )
+
+    with col4:
+        st.metric(
+            "💧 Soil Moisture",
+            soil_display
+        )
+
+    st.caption(
+        f"📍 Farm coordinates: {lat0:.4f}, {lon0:.4f}"
+        f"  |  Forecast period: {len(weather)} days"
     )
 
-    col2.metric(
-        "Latitude",
-        f"{lat0:.4f}"
-    )
-
-    col3.metric(
-        "Longitude",
-        f"{lon0:.4f}"
-    )
-
-    col4.metric(
-        "Forecast Window",
-        f"{forecast_days} Days"
-    )
-
-    
     # WEATHER ANALYTICS
 
     st.subheader("Weather Analytics", anchor="weather-analytics")
